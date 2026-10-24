@@ -35,9 +35,6 @@ CPU_USER_PERCENT   <- round(CPU_PERCENT * runif(total_linhas, 0.65, 0.75), 2)
 CPU_SYSTEM_PERCENT <- round(CPU_PERCENT * runif(total_linhas, 0.15, 0.25), 2)
 CPU_IDLE_PERCENT   <- round(100 - CPU_PERCENT, 2)
 
-iowait_escala <- por_node(c(1.0, 1.5, 2.0, 4.0, 1.5))
-CPU_IOWAIT_PERCENT <- round(limitar(rexp(total_linhas, rate = 1 / iowait_escala), 0, 15), 2)
-
 freq_media <- por_node(c(2500, 2900, 3150, 2700, 3000))
 freq_sd    <- por_node(c(300, 450, 250, 500, 400))
 CPU_FREQ_ATUAL <- round(limitar(rnorm(total_linhas, mean = freq_media, sd = freq_sd), 1800, 3400), 2)
@@ -56,13 +53,12 @@ RAM_TOTAL     <- rep(512, total_linhas)
 RAM_USED      <- round(RAM_TOTAL * RAM_PERCENT / 100, 2)
 RAM_AVAILABLE <- round(RAM_TOTAL - RAM_USED, 2)
 
-swap_escala <- por_node(c(0.8, 1.5, 2.0, 1.2, 3.0))
+swap_base <- por_node(c(0.5, 0.8, 1.0, 3.0, 1.0))
+swap_incl <- por_node(c(0.08, 0.10, 0.14, 0.25, 0.12))
+swap_sd   <- por_node(c(0.6, 0.8, 1.0, 1.5, 0.9))
+
 SWAP_PERCENT <- round(
-  ifelse(
-    RAM_PERCENT >= 70,
-    runif(total_linhas, 5, 30),
-    limitar(rexp(total_linhas, rate = 1 / swap_escala), 0, 6)
-  ),
+  limitar(swap_base + swap_incl * RAM_PERCENT + rnorm(total_linhas, 0, swap_sd), 0, 100),
   2
 )
 
@@ -79,6 +75,15 @@ gerar_swap_io <- function(n) {
 
 SWAP_IN  <- gerar_swap_io(total_linhas)
 SWAP_OUT <- gerar_swap_io(total_linhas)
+
+io_base <- por_node(c(0.5, 0.8, 1.0, 1.5, 1.0))
+io_in   <- por_node(c(0.10, 0.12, 0.15, 0.35, 0.15))
+io_out  <- por_node(c(0.12, 0.15, 0.18, 0.45, 0.18))
+
+CPU_IOWAIT_PERCENT <- round(
+  limitar(io_base + io_in * SWAP_IN + io_out * SWAP_OUT + rnorm(total_linhas, 0, 0.6), 0, 100),
+  2
+)
 
 disco_media <- por_node(c(42, 55, 68, 50, 62))
 disco_sd    <- por_node(c(10, 17, 9, 20, 14))
