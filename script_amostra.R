@@ -2,13 +2,16 @@ set.seed(13)
 
 qtd_nodes <- 5
 qtd_linhas <- 24 * 60 * 60 / 10
+total_linhas <- qtd_nodes * qtd_linhas
+
+limitar <- function(x, minimo, maximo) pmin(pmax(x, minimo), maximo)
 
 HOSTNAME <- rep(
   paste0("node-0", 1:qtd_nodes),
   each = qtd_linhas
 )
 
-USER <- rep("root", qtd_nodes * qtd_linhas)
+USER <- rep("root", total_linhas)
 
 horarios <- seq(
   as.POSIXct("2026-10-23 00:00:00"),
@@ -21,90 +24,54 @@ TIMESTAMP <- rep(
   times = qtd_nodes
 )
 
-total_linhas <- qtd_nodes * qtd_linhas
+CPU_PERCENT <- round(limitar(rnorm(total_linhas, mean = 52, sd = 22), 0.5, 100), 2)
 
-# CPU
-CPU_PERCENT <- sample(
-  c(15, 25, 35, 45, 55, 65, 75, 85, 95),
-  total_linhas, replace = TRUE,
-  prob = c(8, 12, 15, 15, 15, 12, 10, 8, 5)
-)
+CPU_USER_PERCENT   <- round(CPU_PERCENT * runif(total_linhas, 0.65, 0.75), 2)
+CPU_SYSTEM_PERCENT <- round(CPU_PERCENT * runif(total_linhas, 0.15, 0.25), 2)
+CPU_IDLE_PERCENT   <- round(100 - CPU_PERCENT, 2)
 
-CPU_USER_PERCENT <- round(CPU_PERCENT * 0.70, 1)
-CPU_SYSTEM_PERCENT <- round(CPU_PERCENT * 0.20, 1)
-CPU_IDLE_PERCENT <- 100 - CPU_PERCENT
+CPU_IOWAIT_PERCENT <- round(limitar(rexp(total_linhas, rate = 1 / 1.5), 0, 15), 2)
 
-CPU_IOWAIT_PERCENT <- sample(
-  c(0, 1, 2, 5, 10),
-  total_linhas, replace = TRUE,
-  prob = c(45, 25, 15, 10, 5)
-)
+CPU_FREQ_ATUAL <- round(limitar(rnorm(total_linhas, mean = 2900, sd = 450), 1800, 3400), 2)
 
-CPU_FREQ_ATUAL <- sample(
-  c(1800, 2200, 2600, 3000, 3400),
-  total_linhas, replace = TRUE,
-  prob = c(10, 20, 30, 25, 15)
-)
+CPU_COUNT_LOGICA <- rep(128L, total_linhas)
 
-CPU_COUNT_LOGICA <- rep(128, total_linhas)
+LOAD_AVG_1  <- round(CPU_PERCENT / 100 * 128 + runif(total_linhas, 0.1, 2.0), 2)
+LOAD_AVG_5  <- round(LOAD_AVG_1 * runif(total_linhas, 0.80, 0.90), 2)
+LOAD_AVG_15 <- round(LOAD_AVG_1 * runif(total_linhas, 0.70, 0.80), 2)
 
-LOAD_AVG_1 <- round(
-  CPU_PERCENT / 100 * 128 +
-    sample(1:20, total_linhas, replace = TRUE) / 10,
+RAM_PERCENT <- round(limitar(rbeta(total_linhas, 2.2, 3.5) * 100, 5, 95), 2)
+
+RAM_TOTAL     <- rep(512, total_linhas)
+RAM_USED      <- round(RAM_TOTAL * RAM_PERCENT / 100, 2)
+RAM_AVAILABLE <- round(RAM_TOTAL - RAM_USED, 2)
+
+SWAP_PERCENT <- round(
+  ifelse(
+    RAM_PERCENT >= 70,
+    runif(total_linhas, 5, 30),
+    limitar(rexp(total_linhas, rate = 1 / 1.5), 0, 6)
+  ),
   2
 )
 
-LOAD_AVG_5 <- round(LOAD_AVG_1 * 0.85, 2)
-LOAD_AVG_15 <- round(LOAD_AVG_1 * 0.75, 2)
+SWAP_TOTAL <- 128
+SWAP_USED  <- round(SWAP_TOTAL * SWAP_PERCENT / 100, 2)
+SWAP_FREE  <- round(SWAP_TOTAL - SWAP_USED, 2)
 
-RAM_PERCENT <- sample(
-  c(10, 20, 30, 40, 50, 60, 70, 80, 90),
-  total_linhas, replace = TRUE,
-  prob = c(15, 20, 20, 15, 12, 8, 5, 3, 2)
-)
+gerar_swap_io <- function(n) {
+  ativo <- runif(n) > 0.65
+  round(ifelse(ativo, limitar(rexp(n, rate = 1 / 6), 0.01, 25), 0), 2)
+}
 
-RAM_TOTAL <- rep(512, total_linhas)
-RAM_USED <- round(RAM_TOTAL * RAM_PERCENT / 100, 1)
-RAM_AVAILABLE <- RAM_TOTAL - RAM_USED
+SWAP_IN  <- gerar_swap_io(total_linhas)
+SWAP_OUT <- gerar_swap_io(total_linhas)
 
-SWAP_PERCENT <- ifelse(
-  RAM_PERCENT >= 70,
-  sample(
-    c(5, 10, 20, 30),
-    total_linhas, replace = TRUE,
-    prob = c(40, 30, 20, 10)
-  ),
-  sample(
-    c(0, 1, 2, 5),
-    total_linhas, replace = TRUE,
-    prob = c(50, 25, 15, 10)
-  )
-)
-
-SWAP_USED <- round(128 * SWAP_PERCENT / 100, 1)
-SWAP_FREE <- 128 - SWAP_USED
-
-SWAP_IN <- sample(
-  c(0, 1, 5, 10, 20),
-  total_linhas, replace = TRUE,
-  prob = c(65, 15, 10, 7, 3)
-)
-
-SWAP_OUT <- sample(
-  c(0, 1, 5, 10, 20),
-  total_linhas, replace = TRUE,
-  prob = c(65, 15, 10, 7, 3)
-)
-
-DISCO_PERCENT <- sample(
-  c(20, 30, 40, 50, 60, 70, 80, 90),
-  total_linhas, replace = TRUE,
-  prob = c(5, 10, 20, 20, 18, 12, 10, 5)
-)
+DISCO_PERCENT <- round(limitar(rnorm(total_linhas, mean = 55, sd = 17), 20, 95), 2)
 
 DISCO_TOTAL <- rep(2000, total_linhas)
-DISCO_USED <- round(DISCO_TOTAL * DISCO_PERCENT / 100, 1)
-DISCO_FREE <- DISCO_TOTAL - DISCO_USED
+DISCO_USED  <- round(DISCO_TOTAL * DISCO_PERCENT / 100, 2)
+DISCO_FREE  <- round(DISCO_TOTAL - DISCO_USED, 2)
 
 dados_hpc <- data.frame(
   TIMESTAMP,
